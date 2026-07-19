@@ -2,6 +2,15 @@
 
 This repository contains a full-stack implementation of a highly resilient **User Payout Management System** that handles affiliate sales, advance payouts, reconciliation, and deferred debt recovery.
 
+## ✅ Expected Deliverables Checklist
+1. **Low-Level Design (LLD)**: Documented in Section 1 (Architecture) and Section 3 (Core Workflows).
+2. **Database Schema(s) with Relationships**: Documented in Section 2 with a Mermaid ER Diagram.
+3. **Class Design**: Implemented via modular JavaScript classes (`*Service.js` Singletons). Documented in Section 1.
+4. **APIs/Endpoints**: Documented in Section 4.
+5. **Handling of Edge Cases & Failure Scenarios**: Extensively documented in Section 3 (Race conditions, Clawbacks, Gateway Failures).
+6. **Working Implementation**: Full-stack codebase running via Docker Compose (`Node.js/Express` & `Next.js`).
+7. **Key Design Decisions & Trade-offs**: Documented alongside schemas in Section 2, and explicitly in Section 5 (Trade-offs).
+
 ## 🚀 Getting Started
 
 Run the entire full-stack application (Database, Backend, Frontend) via Docker Compose:
@@ -40,28 +49,40 @@ backend/
 │   ├── utils/                # Mock Gateway & Shared logic
 ```
 
+### Class Design (Service Layer)
+The backend uses a singleton-based Service layer to orchestrate complex database operations.
+
+```mermaid
+classDiagram
+    class SaleService {
+        +createSale(data)
+        +reconcileSale(saleId, status)
+        +getSalesByUser(userId)
+    }
+    class PayoutService {
+        +processAdvancePayouts(userId)
+        +getPayoutHistory(userId)
+    }
+    class WithdrawalService {
+        +initiateWithdrawal(userId, amount)
+        +updateWithdrawalStatus(id, status)
+    }
+    class MockPaymentGateway {
+        +simulatePayoutGateway(data)
+    }
+    SaleService ..> Prisma
+    PayoutService ..> Prisma
+    WithdrawalService ..> Prisma
+    WithdrawalService ..> MockPaymentGateway
+```
+
 ---
 
 ## 2. Database & Ledger Design
 
 The database is normalized for strict financial auditing. We use `BigInt` (paise) for all financial calculations to prevent floating-point precision loss.
 
-```mermaid
-erDiagram
-    User ||--o{ Sale : generates
-    User ||--|| Wallet : owns
-    User ||--o{ Withdrawal : requests
-    Wallet ||--o{ WalletTransaction : contains
-    Sale ||--o{ WalletTransaction : links
-    Withdrawal ||--o{ WalletTransaction : links
-
-    Wallet {
-        UUID id PK
-        BigInt balancePaise
-        BigInt pendingRecoveryPaise
-        DateTime lastWithdrawalAt
-    }
-```
+![ER Diagram](./docs/er-diagram.png)
 
 ### Key Schema Decisions
 - **`WalletTransaction` (Immutable Ledger)**: While `Wallet.balancePaise` provides `O(1)` reads, financial systems require an append-only ledger for auditability.
