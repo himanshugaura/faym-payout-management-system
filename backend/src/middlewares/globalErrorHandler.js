@@ -15,9 +15,7 @@ const globalErrorHandler = (err, req, res, next) => {
     ...(env.NODE_ENV === 'development' && { stack: err.stack }),
   };
 
-  if (env.NODE_ENV === 'development') {
-    logger.error(err);
-  }
+  logger.error(err);
 
   res.status(statusCode).json(response);
 };

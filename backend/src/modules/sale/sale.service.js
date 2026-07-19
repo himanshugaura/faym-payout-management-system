@@ -99,13 +99,14 @@ const reconcileSale = async (saleId, newStatus) => {
     }
 
     const updatedSale = await tx.sale.findUnique({ where: { id: saleId } });
+    const freshWallet = await tx.wallet.findUnique({ where: { id: wallet.id } });
 
     if (newStatus === 'APPROVED') {
 
       const finalCreditPaise = sale.earningPaise - advancePaidPaise;
 
       if (finalCreditPaise > 0n) {
-        const availableRecovery = BigInt(wallet.pendingRecoveryPaise || 0);
+        const availableRecovery = BigInt(freshWallet.pendingRecoveryPaise || 0);
         const recoveryAmount = finalCreditPaise < availableRecovery ? finalCreditPaise : availableRecovery;
         const actualCredit = finalCreditPaise - recoveryAmount;
 
@@ -142,7 +143,7 @@ const reconcileSale = async (saleId, newStatus) => {
     } else {
 
       if (advancePaidPaise > 0n) {
-        const recoverable = wallet.balancePaise < advancePaidPaise ? wallet.balancePaise : advancePaidPaise;
+        const recoverable = freshWallet.balancePaise < advancePaidPaise ? freshWallet.balancePaise : advancePaidPaise;
         const remainder = advancePaidPaise - recoverable;
 
         if (recoverable > 0n) {

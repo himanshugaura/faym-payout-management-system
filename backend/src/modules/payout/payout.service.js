@@ -58,7 +58,8 @@ const processAdvancePayouts = async (userId = null) => {
         totalAdvancePaise += advanceAmountPaise;
       }
 
-      const availableRecovery = BigInt(wallet.pendingRecoveryPaise || 0);
+      const freshWallet = await tx.wallet.findUnique({ where: { id: wallet.id } });
+      const availableRecovery = BigInt(freshWallet.pendingRecoveryPaise || 0);
       const recoveryAmount = totalAdvancePaise < availableRecovery ? totalAdvancePaise : availableRecovery;
       const actualCredit = totalAdvancePaise - recoveryAmount;
 

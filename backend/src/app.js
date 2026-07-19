@@ -1,7 +1,6 @@
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
-import pinoHttp from 'pino-http';
 import logger from './config/logger.js';
 import globalErrorHandler from './middlewares/globalErrorHandler.js';
 import AppError from './utils/AppError.js';
@@ -30,7 +29,7 @@ app.use(cors({
 
     const cleanOrigin = origin.replace(/\/$/, '');
     if (allowedOrigins.indexOf(cleanOrigin) === -1 && !allowedOrigins.includes('*')) {
-      var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
       return callback(new Error(msg), false);
     }
     return callback(null, true);

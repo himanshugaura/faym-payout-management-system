@@ -10,7 +10,7 @@ const getByIdSchema = {
   params: z.object({ withdrawalId: z.string().uuid() }),
 };
 
-router.post('/reset-cooldown', withdrawalController.resetCooldown);
+router.post('/reset-cooldown', validate(withdrawalValidation.resetCooldown), withdrawalController.resetCooldown);
 router.post('/', validate(withdrawalValidation.initiateWithdrawal), withdrawalController.initiateWithdrawal);
 
 router.get('/user/:userId', validate(withdrawalValidation.getWithdrawalsByUser), withdrawalController.getWithdrawalsByUser);

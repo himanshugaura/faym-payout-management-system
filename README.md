@@ -123,7 +123,9 @@ Users can withdraw their available balance (strictly limited to 1 request per 24
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| `POST` | `/api/v1/users/register` | Register a new user |
 | `POST` | `/api/v1/sales` | Create a new pending sale |
+| `GET`  | `/api/v1/sales/user/:userId` | Get all sales for a user |
 | `PATCH`| `/api/v1/sales/:id/reconcile` | Reconcile a sale (Approve/Reject) |
 | `POST` | `/api/v1/payouts/advance` | Trigger the batch advance payout job |
 | `GET`  | `/api/v1/payouts/:userId` | Get user wallet and transaction ledger |
