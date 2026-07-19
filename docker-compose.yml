@@ -27,6 +27,7 @@ services:
       # Use internal docker network to connect to db service on port 5432
       - DATABASE_URL=postgresql://postgres:password@db:5432/backend_db?schema=public
       - PORT=8080
+      - CORS_ORIGIN=http://localhost:3000
     depends_on:
       db:
         condition: service_healthy
