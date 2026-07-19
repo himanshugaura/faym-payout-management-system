@@ -89,10 +89,16 @@ const reconcileSale = async (saleId, newStatus) => {
 
   return prisma.$transaction(async (tx) => {
 
-    const updatedSale = await tx.sale.update({
-      where: { id: saleId },
+    const updateResult = await tx.sale.updateMany({
+      where: { id: saleId, status: 'PENDING' },
       data: { status: newStatus, reconciledAt: new Date() },
     });
+
+    if (updateResult.count === 0) {
+      throw new AppError(409, 'Conflict: Sale was already reconciled by another process.');
+    }
+
+    const updatedSale = await tx.sale.findUnique({ where: { id: saleId } });
 
     if (newStatus === 'APPROVED') {
 

@@ -36,12 +36,15 @@ const processAdvancePayouts = async (userId = null) => {
       let totalAdvancePaise = 0n;
 
       for (const sale of userSales) {
-        const advanceAmountPaise = (sale.earningPaise * ADVANCE_PAYOUT_RATE) / 100n;
-
-        await tx.sale.update({
-          where: { id: sale.id },
+       
+        const updateResult = await tx.sale.updateMany({
+          where: { id: sale.id, isAdvancePaid: false },
           data: { isAdvancePaid: true },
         });
+
+        if (updateResult.count === 0) continue;
+
+        const advanceAmountPaise = (sale.earningPaise * ADVANCE_PAYOUT_RATE) / 100n;
 
         await tx.walletTransaction.create({
           data: {
