@@ -13,5 +13,5 @@ COPY . .
 EXPOSE 3000
 ENV PORT=3000
 
-# Start development server on port 3000
-CMD ["pnpm", "run", "dev", "--", "-p", "3000"]
+# Start development server
+CMD ["pnpm", "run", "dev"]

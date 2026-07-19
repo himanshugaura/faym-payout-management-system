@@ -114,9 +114,19 @@ export default function DashboardPage() {
         {/* Main Dashboard (Requires User) */}
         {userId && (
           <Tabs defaultValue="user" className="mt-6">
-            <TabsList className="mb-4">
-              <TabsTrigger value="user">User Dashboard</TabsTrigger>
-              <TabsTrigger value="admin">Admin Dashboard</TabsTrigger>
+            <TabsList className="mb-4 h-14 p-1.5 bg-muted/60 border rounded-full inline-flex max-w-fit shadow-inner">
+              <TabsTrigger 
+                value="user"
+                className="text-base px-10 h-full font-bold data-active:bg-primary data-active:text-primary-foreground data-active:shadow-md transition-all rounded-full"
+              >
+                User Dashboard
+              </TabsTrigger>
+              <TabsTrigger 
+                value="admin"
+                className="text-base px-10 h-full font-bold data-active:bg-orange-500 data-active:text-white data-active:shadow-md transition-all rounded-full"
+              >
+                Admin Dashboard
+              </TabsTrigger>
             </TabsList>
             
             <TabsContent value="user">
