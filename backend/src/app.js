@@ -11,7 +11,6 @@ import { saleRoutes } from './modules/sale/sale.route.js';
 import { payoutRoutes } from './modules/payout/payout.route.js';
 import { withdrawalRoutes } from './modules/withdrawal/withdrawal.route.js';
 
-
 BigInt.prototype.toJSON = function () {
   return this.toString();
 };
