@@ -3,8 +3,8 @@ import { sendResponse } from '../../utils/response.js';
 import { withdrawalService } from './withdrawal.service.js';
 
 const initiateWithdrawal = catchAsync(async (req, res) => {
-  const { userId, amountPaise } = req.body;
-  const result = await withdrawalService.initiateWithdrawal(userId, amountPaise);
+  const { userId, amountPaise, forceStatus } = req.body;
+  const result = await withdrawalService.initiateWithdrawal(userId, amountPaise, forceStatus);
   const statusCode = result.withdrawal.status === 'SUCCESS' ? 201 : 200;
   return sendResponse(res, statusCode, 'Withdrawal processed', result);
 });
@@ -30,9 +30,16 @@ const getWithdrawalById = catchAsync(async (req, res) => {
   return sendResponse(res, 200, 'Withdrawal fetched successfully', withdrawal);
 });
 
+const resetCooldown = catchAsync(async (req, res) => {
+  const { userId } = req.body;
+  await withdrawalService.resetCooldown(userId);
+  sendResponse(res, 200, 'Withdrawal cooldown reset successfully');
+});
+
 export const withdrawalController = {
   initiateWithdrawal,
   updateWithdrawalStatus,
   getWithdrawalsByUser,
   getWithdrawalById,
+  resetCooldown,
 };

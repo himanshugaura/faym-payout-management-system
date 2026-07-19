@@ -4,7 +4,7 @@ import { simulatePayoutGateway } from '../../utils/paymentGateway.js';
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
-const initiateWithdrawal = async (userId, amountPaise) => {
+const initiateWithdrawal = async (userId, amountPaise, forceStatus) => {
   const amountBigInt = BigInt(amountPaise);
 
   const wallet = await prisma.wallet.findUnique({ where: { userId } });
@@ -59,6 +59,7 @@ const initiateWithdrawal = async (userId, amountPaise) => {
     withdrawalId: withdrawal.id,
     amountPaise: amountBigInt,
     userId,
+    forceStatus,
   });
 
   if (gatewayResult.success) {
@@ -97,7 +98,10 @@ const initiateWithdrawal = async (userId, amountPaise) => {
 
     await tx.wallet.update({
       where: { id: wallet.id },
-      data: { balancePaise: { increment: amountBigInt } },
+      data: { 
+        balancePaise: { increment: amountBigInt },
+        lastWithdrawalAt: null // Allow immediate retry per assignment req
+      },
     });
 
     return updated;
@@ -155,7 +159,10 @@ const updateWithdrawalStatus = async (withdrawalId, status, failureReason = null
 
     await tx.wallet.update({
       where: { id: wallet.id },
-      data: { balancePaise: { increment: withdrawal.amountPaise } },
+      data: { 
+        balancePaise: { increment: withdrawal.amountPaise },
+        lastWithdrawalAt: null 
+      },
     });
 
     return updated;
@@ -194,9 +201,21 @@ const getWithdrawalById = async (withdrawalId) => {
   return withdrawal;
 };
 
+const resetCooldown = async (userId) => {
+  const wallet = await prisma.wallet.findUnique({ where: { userId } });
+  if (!wallet) throw new AppError(404, 'Wallet not found');
+
+  await prisma.wallet.update({
+    where: { id: wallet.id },
+    data: { lastWithdrawalAt: null },
+  });
+  return { success: true };
+};
+
 export const withdrawalService = {
   initiateWithdrawal,
   updateWithdrawalStatus,
   getWithdrawalsByUser,
   getWithdrawalById,
+  resetCooldown,
 };

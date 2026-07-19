@@ -25,7 +25,18 @@ app.use(express.json());
 
 app.use(express.urlencoded({ extended: true }));
 
-app.use(pinoHttp({ logger }));
+app.use((req, res, next) => {
+  if (req.url === '/health') return next();
+  const start = Date.now();
+  res.on('finish', () => {
+    const ms = Date.now() - start;
+    const method = req.method.padEnd(5, ' ');
+    const url = req.originalUrl.padEnd(30, ' ');
+    const msStr = `${ms}ms`.padStart(5, ' ');
+    logger.info(`${method} ${url} ${res.statusCode} ${msStr}`);
+  });
+  next();
+});
 
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/sales', saleRoutes);

@@ -55,9 +55,26 @@ const processAdvancePayouts = async (userId = null) => {
         totalAdvancePaise += advanceAmountPaise;
       }
 
+      const availableRecovery = BigInt(wallet.pendingRecoveryPaise || 0);
+      const recoveryAmount = totalAdvancePaise < availableRecovery ? totalAdvancePaise : availableRecovery;
+      const actualCredit = totalAdvancePaise - recoveryAmount;
+
+      if (recoveryAmount > 0n) {
+        await tx.walletTransaction.create({
+          data: {
+            walletId: wallet.id,
+            type: 'RECOVERY_DEDUCTION',
+            amountPaise: recoveryAmount,
+          },
+        });
+      }
+
       const updatedWallet = await tx.wallet.update({
         where: { id: wallet.id },
-        data: { balancePaise: { increment: totalAdvancePaise } },
+        data: { 
+          balancePaise: { increment: actualCredit },
+          ...(recoveryAmount > 0n && { pendingRecoveryPaise: { decrement: recoveryAmount } })
+        },
       });
 
       return {
@@ -86,7 +103,7 @@ const getPayoutHistory = async (userId) => {
       walletTransactions: {
         include: {
           sale: { select: { id: true, brand: true, earningPaise: true, status: true } },
-          withdrawal: { select: { id: true, status: true } },
+          withdrawal: { select: { id: true, status: true, failureReason: true } },
         },
         orderBy: { createdAt: 'desc' },
       },

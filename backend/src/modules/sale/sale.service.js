@@ -98,36 +98,64 @@ const reconcileSale = async (saleId, newStatus) => {
 
       const finalCreditPaise = sale.earningPaise - advancePaidPaise;
 
-      if (finalCreditPaise !== 0n) {
-        await tx.walletTransaction.create({
-          data: {
-            walletId: wallet.id,
-            saleId,
-            type: 'FINAL_CREDIT',
-            amountPaise: finalCreditPaise,
-          },
-        });
+      if (finalCreditPaise > 0n) {
+        const availableRecovery = BigInt(wallet.pendingRecoveryPaise || 0);
+        const recoveryAmount = finalCreditPaise < availableRecovery ? finalCreditPaise : availableRecovery;
+        const actualCredit = finalCreditPaise - recoveryAmount;
+
+        if (actualCredit > 0n) {
+          await tx.walletTransaction.create({
+            data: {
+              walletId: wallet.id,
+              saleId,
+              type: 'FINAL_CREDIT',
+              amountPaise: actualCredit,
+            },
+          });
+        }
+
+        if (recoveryAmount > 0n) {
+          await tx.walletTransaction.create({
+            data: {
+              walletId: wallet.id,
+              saleId,
+              type: 'RECOVERY_DEDUCTION',
+              amountPaise: recoveryAmount,
+            },
+          });
+        }
 
         await tx.wallet.update({
           where: { id: wallet.id },
-          data: { balancePaise: { increment: finalCreditPaise } },
+          data: { 
+            balancePaise: { increment: actualCredit },
+            ...(recoveryAmount > 0n && { pendingRecoveryPaise: { decrement: recoveryAmount } })
+          },
         });
       }
     } else {
 
       if (advancePaidPaise > 0n) {
-        await tx.walletTransaction.create({
-          data: {
-            walletId: wallet.id,
-            saleId,
-            type: 'REJECTION_ADJUSTMENT',
-            amountPaise: advancePaidPaise,
-          },
-        });
+        const recoverable = wallet.balancePaise < advancePaidPaise ? wallet.balancePaise : advancePaidPaise;
+        const remainder = advancePaidPaise - recoverable;
+
+        if (recoverable > 0n) {
+          await tx.walletTransaction.create({
+            data: {
+              walletId: wallet.id,
+              saleId,
+              type: 'REJECTION_ADJUSTMENT',
+              amountPaise: recoverable,
+            },
+          });
+        }
 
         await tx.wallet.update({
           where: { id: wallet.id },
-          data: { balancePaise: { decrement: advancePaidPaise } },
+          data: { 
+            ...(recoverable > 0n && { balancePaise: { decrement: recoverable } }),
+            ...(remainder > 0n && { pendingRecoveryPaise: { increment: remainder } })
+          },
         });
       }
     }
