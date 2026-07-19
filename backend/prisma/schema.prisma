@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  wallet      Wallet?
+  sales       Sale[]
+  withdrawals Withdrawal[]
+}
+
+model Sale {
+  id           String     @id @default(uuid())
+  userId       String
+  brand        String
+  earningPaise BigInt
+  status       SaleStatus @default(PENDING)
+
+  isAdvancePaid Boolean @default(false)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  reconciledAt DateTime?
+
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletTransactions WalletTransaction[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([isAdvancePaid])
+}
+
+model Wallet {
+  id           String @id @default(uuid())
+  userId       String @unique
+  balancePaise BigInt @default(0)
+
+  lastWithdrawalAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletTransactions WalletTransaction[]
+}
+
+model Withdrawal {
+  id     String @id @default(uuid())
+  userId String
+
+  amountPaise BigInt
+
+  status WithdrawalStatus @default(PENDING)
+
+  failureReason String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletTransactions WalletTransaction[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model WalletTransaction {
+  id String @id @default(uuid())
+
+  walletId     String
+  saleId       String?
+  withdrawalId String?
+
+  type TransactionType
+
+  amountPaise BigInt
+
+  createdAt DateTime @default(now())
+
+  wallet     Wallet      @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  sale       Sale?       @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  withdrawal Withdrawal? @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
+
+  @@index([walletId])
+  @@index([saleId])
+  @@index([withdrawalId])
+}
+
+enum SaleStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum WithdrawalStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+}
+
+enum TransactionType {
+  ADVANCE_CREDIT
+  FINAL_CREDIT
+  WITHDRAWAL_DEBIT
+  WITHDRAWAL_REFUND
+  REJECTION_ADJUSTMENT
+}
