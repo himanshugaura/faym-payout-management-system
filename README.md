@@ -1,31 +1,42 @@
 # Payout Management System
 
-This repository contains a full-stack implementation of a highly resilient **User Payout Management System** that handles affiliate sales, advance payouts, reconciliation, and deferred debt recovery.
+This repository contains a full-stack implementation of a highly resilient, financial-grade **User Payout Management System**. The backend is designed with distributed systems principles, ensuring exactly-once processing guarantees, strict ACID compliance, and robust compensating transaction flows.
 
-## ✅ Expected Deliverables Checklist
-1. **Low-Level Design (LLD)**: Documented in Section 1 (Architecture) and Section 3 (Core Workflows).
-2. **Database Schema(s) with Relationships**: Documented in Section 2 with a Mermaid ER Diagram.
-3. **Class Design**: Implemented via modular JavaScript classes (`*Service.js` Singletons). Documented in Section 1.
-4. **APIs/Endpoints**: Documented in Section 4.
-5. **Handling of Edge Cases & Failure Scenarios**: Extensively documented in Section 3 (Race conditions, Clawbacks, Gateway Failures).
-6. **Working Implementation**: Full-stack codebase running via Docker Compose (`Node.js/Express` & `Next.js`).
-7. **Key Design Decisions & Trade-offs**: Documented alongside schemas in Section 2, and explicitly in Section 5 (Trade-offs).
+## Getting Started
 
-## 🚀 Getting Started
-
+### Method 1: Using Docker (Recommended)
 Run the entire full-stack application (Database, Backend, Frontend) via Docker Compose:
 
 ```bash
 docker-compose up --build
 ```
-- **Frontend Dashboard**: http://localhost:3001
-- **Backend API**: http://localhost:3000
+
+### Method 2: Manual Setup (Without Docker)
+If you prefer not to use Docker, ensure you have Node.js (v20+) and PostgreSQL installed.
+
+**1. Database & Backend Setup**
+```bash
+cd backend
+pnpm install
+# Set DATABASE_URL in .env to your local PostgreSQL instance
+npx prisma db push
+pnpm run start
+```
+*Backend will run on http://localhost:8080*
+
+**2. Frontend Setup**
+```bash
+cd frontend
+pnpm install
+pnpm run dev
+```
+*Frontend will run on http://localhost:3000.*
 
 ---
 
 ## 1. System Architecture
 
-The system follows a strict **Service-Oriented Architecture (SOA)** using the Controller-Service-Repository pattern.
+The system follows a strict **Service-Oriented Architecture (SOA)** using the Controller-Service-Repository pattern to decouple HTTP transport logic from core domain logic.
 
 ```mermaid
 graph TD
@@ -38,19 +49,8 @@ graph TD
     Prisma --> DB[(PostgreSQL)]
 ```
 
-### Folder Structure (Backend)
-```text
-backend/
-├── prisma/schema.prisma      # Database schema
-├── src/
-│   ├── config/               # Environment & logger setup
-│   ├── middlewares/          # Global Zod & Error handlers
-│   ├── modules/              # Domain-driven features (payout, sale, withdrawal)
-│   ├── utils/                # Mock Gateway & Shared logic
-```
-
 ### Class Design (Service Layer)
-The backend uses a singleton-based Service layer to orchestrate complex database operations.
+The backend uses a singleton-based Service layer to orchestrate complex database operations. By isolating business rules in services, the system remains highly testable and agnostic to the underlying Express framework.
 
 ```mermaid
 classDiagram
@@ -78,35 +78,48 @@ classDiagram
 
 ---
 
-## 2. Database & Ledger Design
+## 2. Er diagram
 
-The database is normalized for strict financial auditing. We use `BigInt` (paise) for all financial calculations to prevent floating-point precision loss.
+The database is normalized for strict financial auditing. We explicitly avoid floating-point math by storing all currency as `BigInt` (paise) to prevent IEEE 754 precision loss common in V8/Node.js.
 
 ![ER Diagram](./docs/er-diagram.png)
 
 ### Key Schema Decisions
-- **`WalletTransaction` (Immutable Ledger)**: While `Wallet.balancePaise` provides `O(1)` reads, financial systems require an append-only ledger for auditability.
-- **`pendingRecoveryPaise` (Deferred Debt)**: Rather than letting wallet balances drop into the negative when a sale is rejected, the system records unrecoverable debt here. Future payouts are automatically deducted to pay off this debt.
+- **`WalletTransaction` (Event Sourced Ledger)**: While `Wallet.balancePaise` provides `O(1)` read access for real-time balances, true financial systems require an append-only ledger for absolute auditability. The `WalletTransaction` table guarantees that every balance mutation can be deterministically replayed and verified.
+- **`pendingRecoveryPaise` (Deferred Debt)**: A critical invariant of the wallet is that `balancePaise >= 0`. Rather than breaking this invariant when a rejected sale triggers a clawback, the system safely records unrecoverable debt in `pendingRecoveryPaise`. Future incoming credits are automatically intercepted and routed to pay off this debt before reaching the liquid balance.
 
 ---
 
-## 3. Core Workflows & Edge Cases Handled
+## 3. Assumptions & Design Constraints
 
-### A. Advance Payouts & Double Payout Protection
-Eligible pending sales receive a 10% advance payout. 
-**Edge Case Handled (Race Conditions):** Handled via Prisma `$transaction`. If multiple admins trigger the Advance Payout job at the exact same millisecond, row-level locking and the `isAdvancePaid` flag prevent a single sale from ever receiving two advances.
-
-### B. Reconciliation & The "Clawback"
-When a sale is Rejected, the system must recover the advance paid.
-**Edge Case Handled (Negative Balance Prevention):** If a user withdraws their advance before the sale is rejected, the wallet might have ₹0. The system will never result in a `-₹10` balance. Instead, it drains the wallet to `0` and adds `₹10` to `pendingRecoveryPaise`. The next time the user makes a sale, the system intercepts the payout to recover this debt first.
-
-### C. Withdrawals & Gateway Failures
-Users can withdraw their available balance (limited to 1 per 24 hours). The withdrawal connects to an abstracted Mock Payment Gateway.
-**Edge Case Handled (Timeout/Bank Decline):** If the bank declines the withdrawal *after* the wallet was debited, the system safely catches the failure, writes a `WITHDRAWAL_REFUND` to the ledger (restoring funds), and resets the 24-hour lockout timer so the user isn't punished.
+1. **Synchronous Gateway Simulation**: To simplify deployment for this assignment, the payment gateway is simulated synchronously within the worker thread. In a real-world scenario, this would be an asynchronous Webhook-based architecture (e.g., Stripe/Razorpay callbacks).
+2. **Batch Advance Trigger**: The advance payout process is designed to be triggered explicitly via an Admin API endpoint. This avoids the complexity of background Cron processes running on multiple clustered Node.js instances without a distributed lock (like Redlock), which could lead to race conditions in a stateless deployment.
+3. **Internal Consistency Over Availability**: When external systems fail, the system prioritizes rolling back internal state (compensating transactions) over forcing retries, keeping the ledger perfectly consistent at the cost of immediate availability.
 
 ---
 
-## 4. API Endpoints
+## 4. Concurrency Control & Failure Compensation
+
+This system is built to handle race conditions, concurrent requests, and network partitions gracefully.
+
+### A. Exactly-Once Processing (Idempotency)
+When processing advance payouts across thousands of rows, the system must guarantee that a sale never receives a double payout. 
+**Implementation**: We utilize Prisma's `$transaction` API for absolute atomicity. By leveraging `isAdvancePaid` as an idempotency flag within the SQL `WHERE` clause, the database inherently rejects concurrent requests that attempt to process the same sale twice. Row-level locking ensures that if two instances attempt to read and write the same sale simultaneously, the second transaction is safely dropped or rolled back.
+
+### B. The "Clawback" Debt Interception
+When an admin rejects a sale, the system must recover the advance paid.
+**Implementation**: If a user has already withdrawn their funds and their balance is ₹0, deducting the advance would result in a negative balance. The `SaleService` detects this dynamically. It partially drains the wallet to `0` and atomically shifts the remaining liability into `pendingRecoveryPaise`. During the *next* payout cycle, the `PayoutService` intercepts the incoming credit, pays off the debt, and releases only the remainder to the user's liquid balance.
+
+### C. Compensating Transactions (Saga-Lite Pattern)
+Users can withdraw their available balance (strictly limited to 1 request per 24 hours). The withdrawal requires a network call to an abstracted Mock Payment Gateway.
+**Implementation**: We enforce a "2-Phase Commit" style workflow. 
+1. **Phase 1**: The wallet is immediately debited, and a `PROCESSING` withdrawal record is locked in the database via an ACID transaction.
+2. **Phase 2**: The network call is dispatched.
+3. **Compensation**: If the bank declines the request or the network times out, the `WithdrawalService` executes a **compensating transaction** to rollback the state. It writes a `WITHDRAWAL_REFUND` to the ledger, restores the wallet balance, and explicitly clears the 24-hour lockout timer—ensuring the user is not punished for an upstream network failure.
+
+---
+
+## 5. API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -115,10 +128,3 @@ Users can withdraw their available balance (limited to 1 per 24 hours). The with
 | `POST` | `/api/v1/payouts/advance` | Trigger the batch advance payout job |
 | `GET`  | `/api/v1/payouts/:userId` | Get user wallet and transaction ledger |
 | `POST` | `/api/v1/withdrawals` | Initiate a withdrawal to bank account |
-
----
-
-## 5. Future Improvements
-- **BullMQ:** Move the Advance Payout logic from a synchronous API trigger to a Redis-backed background job for automatic retries and decoupling.
-- **Distributed Locking:** Use Redis (Redlock) for distributed locks on `userId` during payouts to guarantee absolute safety in multi-instance horizontal scaling.
-- **Webhooks:** Replace the synchronous Mock Gateway wait with an asynchronous Webhook architecture to prevent tying up Express worker threads.

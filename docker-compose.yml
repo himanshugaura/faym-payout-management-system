@@ -23,11 +23,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "8080:8080"
     environment:
       # Use internal docker network to connect to db service on port 5432
       - DATABASE_URL=postgresql://postgres:password@db:5432/backend_db?schema=public
-      - PORT=3000
+      - PORT=8080
     depends_on:
       db:
         condition: service_healthy
@@ -37,11 +37,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3001:3001"
+      - "3000:3000"
     environment:
-      - PORT=3001
-      # Client side accesses the backend directly from the user's browser via localhost:3000
-      - NEXT_PUBLIC_API_URL=http://localhost:3000/api/v1
+      - PORT=3000
+      # Client side accesses the backend directly from the user's browser via localhost:8080
+      - NEXT_PUBLIC_API_URL=http://localhost:8080/api/v1
     depends_on:
       - backend
 
